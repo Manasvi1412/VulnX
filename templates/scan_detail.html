@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block title %}Scan — {{ scan.target }}{% endblock %}
+{% block extra_css %}
+<style>
+.tab-bar{display:flex;border-bottom:1px solid var(--border2);margin-bottom:0;padding:0 1.25rem}
+.tab-btn{padding:.75rem 1rem;font-size:.8rem;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.4px}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--red)}
+.tab-btn:hover{color:var(--text)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.recon-row{display:flex;align-items:flex-start;gap:10px;padding:10px 1.25rem;border-bottom:1px solid var(--border2);font-size:.83rem}
+.recon-row:last-child{border-bottom:none}
+.recon-tag{font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px}
+.tag-ip      {background:#2a2000;color:var(--yellow);border:1px solid rgba(227,179,65,.3)}
+.tag-server  {background:#1a0a2a;color:var(--purple);border:1px solid rgba(188,140,255,.3)}
+.tag-tech    {background:#0a2a10;color:var(--green); border:1px solid rgba(63,185,80,.3)}
+.tag-port    {background:#2a0a0a;color:var(--red);   border:1px solid rgba(255,68,68,.3)}
+.tag-sub     {background:#0a1a2a;color:var(--blue);  border:1px solid rgba(88,166,255,.3)}
+.url-row{border-bottom:1px solid var(--border2)}
+.url-row:last-child{border-bottom:none}
+.url-main{padding:.7rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .1s}
+.url-main:hover{background:rgba(255,255,255,.02)}
+.url-detail{display:none;background:var(--bg2);border-top:1px solid var(--border2);padding:.875rem 1.25rem}
+.depth-tag{font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--bg4);color:var(--muted2);font-family:var(--mono);flex-shrink:0}
+.form-badge{font-size:.68rem;padding:2px 7px;border-radius:12px;background:#2a2000;color:var(--yellow);border:1px solid rgba(227,179,65,.3)}
+.param-badge{font-size:.68rem;padding:2px 7px;border-radius:12px;background:#0a1a2a;color:var(--blue);border:1px solid rgba(88,166,255,.3)}
+.input-pill{display:inline-block;font-size:.68rem;padding:2px 8px;border-radius:10px;margin:2px 3px 2px 0;background:var(--bg3);border:1px solid var(--border2);color:var(--muted)}
+.input-pill.hidden{background:#2a2000;color:var(--yellow);border-color:rgba(227,179,65,.3)}
+.input-pill.submit{background:#0a2a10;color:var(--green);border-color:rgba(63,185,80,.3)}
+.form-card{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:.75rem 1rem;margin-top:8px}
+.form-card-title{font-size:.72rem;color:var(--purple);font-weight:600;margin-bottom:8px}
+.sc-ok{color:var(--green)}.sc-err{color:var(--red)}.sc-warn{color:var(--yellow)}.sc-muted{color:var(--muted2)}
+.section-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted2);font-weight:600;padding:.5rem 1.25rem;background:var(--bg4);border-bottom:1px solid var(--border2)}
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- Header -->
+<div class="page-header">
+  <div class="d-flex align-items-start gap-3">
+    <a href="/" class="btn btn-outline-secondary btn-sm mt-1"><i class="bi bi-arrow-left"></i></a>
+    <div style="flex:1">
+      <div style="font-size:.72rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Security Assessment</div>
+      <h1 style="font-size:1rem;font-family:var(--mono);color:var(--blue);word-break:break-all">{{ scan.target }}</h1>
+      <div style="font-size:.75rem;color:var(--muted2);margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span><i class="bi bi-hash me-1"></i>Scan {{ scan.id }}</span>
+        <span><i class="bi bi-clock me-1"></i>{{ scan.created_at }}</span>
+        <span id="status-badge">
+          {% if scan.status in ['pending','running'] %}
+            <span class="sev sev-info"><span class="pulse" style="width:5px;height:5px;margin-right:4px"></span>Running Recon</span>
+          {% elif scan.status == 'crawling' %}
+            <span class="sev sev-info"><span class="pulse" style="width:5px;height:5px;margin-right:4px"></span>Crawling</span>
+          {% elif scan.status == 'scanning' %}
+            <span class="sev sev-medium"><span class="pulse" style="width:5px;height:5px;margin-right:4px;background:var(--yellow)"></span>Scanning</span>
+          {% elif scan.status == 'complete' %}
+            <span class="sev sev-low"><i class="bi bi-check-circle me-1"></i>Complete</span>
+          {% else %}
+            <span class="sev sev-info">{{ scan.status }}</span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+    {% if scan.status == 'complete' %}
+    <a href="/report/{{ scan.id }}" class="btn btn-danger btn-sm px-3">
+      <i class="bi bi-file-earmark-text me-1"></i>View Report
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Auto-refresh -->
+{% if scan.status not in ['complete','crawl_error'] %}
+<div class="alert alert-info d-flex align-items-center gap-2 mb-3" style="font-size:.82rem">
+  <span class="pulse"></span>
+  <span id="live-msg">Scan running — page updates automatically…</span>
+</div>
+<script>
+(function poll(){
+  fetch("/api/scan-status/{{ scan.id }}")
+    .then(r=>r.json()).then(d=>{
+      const m=document.getElementById('live-msg');
+      if(d.status==='running')    m.textContent='Running recon… '+d.recon_count+' items found';
+      else if(d.status==='crawling') m.textContent='Crawling… '+d.url_count+' URLs found';
+      else if(d.status==='scanning') m.textContent='Scanning for vulnerabilities… '+d.vuln_count+' found so far';
+      if(!['complete','crawl_error'].includes(d.status)) setTimeout(poll,3000);
+      else location.reload();
+    }).catch(()=>setTimeout(poll,5000));
+})();
+</script>
+{% endif %}
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--red)">
+      <div class="stat-num" style="color:var(--red)">{{ severity_counts.Critical }}</div>
+      <div class="stat-label">Critical</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--purple)">
+      <div class="stat-num" style="color:var(--purple)">{{ urls|length }}</div>
+      <div class="stat-label">URLs Crawled</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--yellow)">
+      <div class="stat-num" style="color:var(--yellow)">{{ total_forms }}</div>
+      <div class="stat-label">Forms Found</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--orange)">
+      <div class="stat-num" style="color:var(--orange)">{{ vulns|length }}</div>
+      <div class="stat-label">Vulnerabilities</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="card">
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('crawl',this)">
+      <i class="bi bi-globe2"></i>Crawled URLs
+      <span style="background:var(--bg4);color:var(--muted2);font-size:.65rem;padding:1px 6px;border-radius:10px;margin-left:2px">{{ urls|length }}</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('recon',this)">
+      <i class="bi bi-search"></i>Recon
+      <span style="background:var(--bg4);color:var(--muted2);font-size:.65rem;padding:1px 6px;border-radius:10px;margin-left:2px">{{ recon|length }}</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('vulns',this)">
+      <i class="bi bi-bug"></i>Vulnerabilities
+      <span style="background:var(--bg4);color:var(--muted2);font-size:.65rem;padding:1px 6px;border-radius:10px;margin-left:2px">{{ vulns|length }}</span>
+    </button>
+  </div>
+
+  <!-- CRAWL TAB -->
+  <div id="tab-crawl" class="tab-panel active">
+    {% if urls %}
+    <div class="section-label">{{ urls|length }} pages · {{ total_forms }} forms · {{ total_params }} param URLs</div>
+    {% for u in urls %}
+    <div class="url-row">
+      <div class="url-main" onclick="toggleDetail('ud{{loop.index}}','ch{{loop.index}}')">
+        <span class="depth-tag">L{{ u.depth }}</span>
+        <span class="mono" style="flex:1;font-size:.78rem">{{ u.url }}</span>
+        <span class="{% if u.status_code==200 %}sc-ok{% elif u.status_code>=400 %}sc-err{% else %}sc-warn{% endif %} me-2" style="font-size:.75rem;font-family:var(--mono)">{{ u.status_code }}</span>
+        {% if u.forms_found > 0 %}<span class="form-badge me-1"><i class="bi bi-ui-checks me-1"></i>{{ u.forms_found }}</span>{% endif %}
+        {% if u.params_found > 0 %}<span class="param-badge me-1"><i class="bi bi-question-circle me-1"></i>{{ u.params_found }}</span>{% endif %}
+        <i class="bi bi-chevron-down" style="font-size:.72rem;color:var(--muted2);transition:transform .2s" id="ch{{loop.index}}"></i>
+      </div>
+      <div class="url-detail" id="ud{{loop.index}}">
+        {% if u.params %}
+        <div style="margin-bottom:10px">
+          <div style="font-size:.7rem;color:var(--muted2);font-weight:600;margin-bottom:5px">URL PARAMS</div>
+          {% for p in u.params %}<span class="param-badge">?{{ p }}</span>{% endfor %}
+        </div>
+        {% endif %}
+        {% if u.forms %}
+          {% for form in u.forms %}
+          <div class="form-card">
+            <div class="form-card-title"><i class="bi bi-ui-checks me-1"></i>Form {{ loop.index }} — {{ form.method }} → <span class="mono" style="font-size:.72rem">{{ form.action[:70] }}{% if form.action|length>70 %}…{% endif %}</span></div>
+            {% for inp in form.inputs %}
+              {% if inp.type=='hidden' %}<span class="input-pill hidden">hidden:{{ inp.name }}</span>
+              {% elif inp.type=='submit' %}<span class="input-pill submit">submit</span>
+              {% else %}<span class="input-pill">{{ inp.type }}:{{ inp.name }}</span>{% endif %}
+            {% endfor %}
+            {% if not form.inputs %}<span style="font-size:.75rem;color:var(--muted2)">No named inputs</span>{% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <span style="font-size:.78rem;color:var(--muted2)">No forms on this page</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state"><i class="bi bi-globe2"></i><h6>No URLs crawled yet</h6>
+      <p>{% if scan.status not in ['complete'] %}Crawler is running…{% else %}No crawl data{% endif %}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- RECON TAB -->
+  <div id="tab-recon" class="tab-panel">
+    {% if recon_grouped %}
+      {% for rtype, tag_cls, icon in [
+        ('IP Address','tag-ip','bi-hdd-network'),
+        ('Web Server','tag-server','bi-server'),
+        ('Technology','tag-tech','bi-cpu'),
+        ('Open Port','tag-port','bi-door-open'),
+        ('Subdomain','tag-sub','bi-diagram-3')
+      ] %}
+        {% if recon_grouped.get(rtype) %}
+        <div class="section-label"><i class="bi {{ icon }} me-1"></i>{{ rtype }}</div>
+        {% for r in recon_grouped[rtype] %}
+        <div class="recon-row">
+          <span class="recon-tag {{ tag_cls }}">{{ rtype.split()[0] }}</span>
+          <span class="mono" style="flex:1;color:var(--text)">{{ r.value }}</span>
+          <span style="color:var(--muted2);font-size:.75rem">{{ r.extra }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+      {% endfor %}
+    {% else %}
+    <div class="empty-state"><i class="bi bi-search"></i><h6>No recon data</h6></div>
+    {% endif %}
+  </div>
+
+  <!-- VULNS TAB -->
+  <div id="tab-vulns" class="tab-panel">
+    {% if vulns %}
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead><tr>
+          <th>Type</th><th>Severity</th><th>URL</th><th>Parameter</th><th>Description</th>
+        </tr></thead>
+        <tbody>
+        {% for v in vulns %}
+        <tr>
+          <td><code style="color:var(--purple);font-size:.78rem">{{ v.vuln_type }}</code></td>
+          <td>
+            {% if v.severity=='Critical' %}<span class="sev sev-critical">Critical</span>
+            {% elif v.severity=='High' %}<span class="sev sev-high">High</span>
+            {% elif v.severity=='Medium' %}<span class="sev sev-medium">Medium</span>
+            {% else %}<span class="sev sev-low">Low</span>{% endif %}
+          </td>
+          <td><span class="mono" style="font-size:.75rem">{{ v.url[:50] }}{% if v.url|length>50 %}…{% endif %}</span></td>
+          <td><code style="color:var(--orange);font-size:.78rem">{{ v.parameter }}</code></td>
+          <td style="color:var(--muted);font-size:.8rem;max-width:250px">{{ v.description[:80] }}…</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-shield-check" style="color:var(--green)"></i>
+      <h6>No vulnerabilities yet</h6>
+      <p>{% if scan.status == 'scanning' %}Scanner running…{% else %}Run a scan to detect vulnerabilities{% endif %}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+function switchTab(name,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+function toggleDetail(id,chevId){
+  const el=document.getElementById(id);
+  const ch=document.getElementById(chevId);
+  const open=el.style.display==='block';
+  el.style.display=open?'none':'block';
+  if(ch) ch.style.transform=open?'':'rotate(180deg)';
+}
+</script>
+{% endblock %}

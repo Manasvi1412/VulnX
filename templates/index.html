@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h1><i class="bi bi-shield-exclamation" style="color:var(--red)"></i>Security Dashboard</h1>
+    <p>Web Application Vulnerability Scanner — Monitor and manage security assessments</p>
+  </div>
+  <button class="btn-scan" onclick="document.getElementById('scanModal').style.display='flex'">
+    <i class="bi bi-plus-lg"></i>New Scan
+  </button>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--blue)">
+      <div class="stat-icon"><i class="bi bi-radar"></i></div>
+      <div class="stat-num" style="color:var(--blue)">{{ total_scans }}</div>
+      <div class="stat-label">Total Scans</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--orange)">
+      <div class="stat-icon"><i class="bi bi-bug"></i></div>
+      <div class="stat-num" style="color:var(--orange)">{{ total_vulns }}</div>
+      <div class="stat-label">Vulnerabilities</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--red)">
+      <div class="stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="stat-num" style="color:var(--red)">{{ critical }}</div>
+      <div class="stat-label">Critical Issues</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card" style="--accent:var(--green)">
+      <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+      <div class="stat-num" style="color:var(--green)">{{ scans|selectattr('status','equalto','complete')|list|length }}</div>
+      <div class="stat-label">Completed</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Scan History -->
+  <div class="col-lg-8">
+    <div class="card" style="height:100%">
+      <div class="card-header">
+        <i class="bi bi-clock-history"></i>Scan History
+        <span style="margin-left:auto;font-size:0.75rem;color:var(--muted2);font-weight:400;text-transform:none;letter-spacing:0">{{ scans|length }} records</span>
+      </div>
+      {% if scans %}
+        {% for scan in scans %}
+        <div class="scan-row">
+          <div style="width:36px;height:36px;border-radius:8px;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            {% if scan.status == 'complete' %}
+              <i class="bi bi-check-lg" style="color:var(--green);font-size:.9rem"></i>
+            {% else %}
+              <span class="pulse"></span>
+            {% endif %}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="mono text-truncate" style="color:var(--blue)">{{ scan.target }}</div>
+            <div style="font-size:0.73rem;color:var(--muted2);margin-top:3px">
+              <i class="bi bi-clock me-1"></i>{{ scan.created_at }}
+              &nbsp;·&nbsp;
+              <i class="bi bi-bug me-1"></i>{{ scan.total_vulns }} vulns found
+            </div>
+          </div>
+          <div>
+            {% if scan.status == 'complete' %}
+              <span class="sev sev-low">Complete</span>
+            {% elif scan.status in ['pending','running','crawling','scanning','recon_done','crawl_done'] %}
+              <span class="sev sev-info"><span class="pulse" style="width:5px;height:5px;margin-right:3px"></span>{{ scan.status }}</span>
+            {% else %}
+              <span class="sev sev-medium">{{ scan.status }}</span>
+            {% endif %}
+          </div>
+          <div class="d-flex gap-2">
+            <a href="/scan/{{ scan.id }}" class="btn btn-outline-secondary btn-sm px-3">
+              <i class="bi bi-eye me-1"></i>View
+            </a>
+            {% if scan.status == 'complete' %}
+            <a href="/report/{{ scan.id }}" class="btn btn-sm" style="background:var(--bg4);border:1px solid var(--border2);color:var(--muted);font-size:0.78rem;border-radius:7px;padding:4px 10px">
+              <i class="bi bi-file-text me-1"></i>Report
+            </a>
+            {% endif %}
+            <form method="POST" action="/delete-scan/{{ scan.id }}" onsubmit="return confirm('Delete this scan?')">
+              <button class="btn btn-sm" style="background:transparent;border:1px solid #3a1a1a;color:var(--red);border-radius:7px;padding:4px 8px">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <i class="bi bi-shield-slash"></i>
+          <h6>No scans yet</h6>
+          <p>Click "New Scan" to start your first security assessment</p>
+          <button class="btn btn-danger mt-3 px-4" onclick="document.getElementById('scanModal').style.display='flex'">
+            <i class="bi bi-plus-lg me-1"></i>Start First Scan
+          </button>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Chart + Modules -->
+  <div class="col-lg-4 d-flex flex-column gap-3">
+    <!-- Severity Chart -->
+    <div class="card flex-grow-1">
+      <div class="card-header"><i class="bi bi-pie-chart"></i>Severity Breakdown</div>
+      <div class="card-body p-3">
+        <div style="position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:1rem">
+          <canvas id="sevChart" width="140" height="140"></canvas>
+          <div style="position:absolute;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;font-family:var(--mono)" id="chartTotal">0</div>
+            <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          {% for label, color, var in [('Critical','#ff4444','--red'),('High','#f0883e','--orange'),('Medium','#e3b341','--yellow'),('Low','#3fb950','--green')] %}
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem">
+            <div style="display:flex;align-items:center;gap:7px">
+              <div style="width:8px;height:8px;border-radius:2px;background:{{ color }}"></div>
+              <span style="color:var(--muted)">{{ label }}</span>
+            </div>
+            <span style="font-family:var(--mono);font-weight:600;color:{{ color }}" id="cnt{{ label }}">0</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Module Status -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-cpu"></i>Active Modules</div>
+      <div class="card-body p-0">
+        {% for icon, label, desc, color, live in [
+          ('bi-search','Recon','Subdomains · Ports · Tech','#58a6ff',true),
+          ('bi-globe2','Crawler','URLs · Forms · Parameters','#3fb950',true),
+          ('bi-bug','Scanner','SQLi · XSS · Headers','#ff4444',true),
+          ('bi-robot','AI Engine','Gemini Analysis · PDF','#bc8cff',true)
+        ] %}
+        <div style="display:flex;align-items:center;gap:12px;padding:.7rem 1rem;border-bottom:1px solid var(--border2)">
+          <div style="width:32px;height:32px;border-radius:8px;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi {{ icon }}" style="color:{{ color }};font-size:.9rem"></i>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:0.82rem;font-weight:600">{{ label }}</div>
+            <div style="font-size:0.72rem;color:var(--muted2)">{{ desc }}</div>
+          </div>
+          {% if live %}<span style="font-size:0.65rem;background:#0d2a18;color:var(--green);border:1px solid #1a4a28;padding:2px 7px;border-radius:10px;font-weight:600">LIVE</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+fetch('/api/severity-stats').then(r=>r.json()).then(d=>{
+  const total = d.Critical+d.High+d.Medium+d.Low;
+  document.getElementById('chartTotal').textContent = total;
+  document.getElementById('cntCritical').textContent = d.Critical;
+  document.getElementById('cntHigh').textContent     = d.High;
+  document.getElementById('cntMedium').textContent   = d.Medium;
+  document.getElementById('cntLow').textContent      = d.Low;
+  new Chart(document.getElementById('sevChart'),{
+    type:'doughnut',
+    data:{
+      labels:['Critical','High','Medium','Low'],
+      datasets:[{
+        data:[d.Critical||0.01,d.High||0.01,d.Medium||0.01,d.Low||0.01],
+        backgroundColor:['#ff4444','#f0883e','#e3b341','#3fb950'],
+        borderColor:'#161b22', borderWidth:3, hoverOffset:6
+      }]
+    },
+    options:{
+      responsive:false, cutout:'72%',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.label}: ${total?c.raw:0}`}}}
+    }
+  });
+}).catch(()=>{});
+</script>
+{% endblock %}

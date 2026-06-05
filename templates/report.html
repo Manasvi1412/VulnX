@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Report — {{ scan.target }}{% endblock %}
+{% block extra_css %}
+<style>
+/* ── Cover ── */
+.report-cover{background:linear-gradient(135deg,#0d1117 0%,#1a0505 60%,#0d1117 100%);border:1px solid var(--border2);border-radius:12px;padding:2rem;margin-bottom:1.5rem;position:relative;overflow:hidden}
+.report-cover::before{content:'';position:absolute;top:-30%;right:-10%;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(255,68,68,.05) 0%,transparent 70%);pointer-events:none}
+
+/* ── Severity boxes ── */
+.sev-box{border-radius:10px;padding:1rem;text-align:center;border:1px solid;min-width:75px}
+
+/* ── Vuln cards ── */
+.vuln-card{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;margin-bottom:1rem;overflow:hidden;transition:border-color .2s}
+.vuln-card:hover{border-color:var(--border)}
+.vuln-card-header{padding:.875rem 1.25rem;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:10px}
+.vuln-card-body{padding:1.25rem}
+
+/* ── Info grid ── */
+.info-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.info-table td{padding:6px 10px;border-bottom:1px solid var(--border2);vertical-align:top}
+.info-table tr:last-child td{border-bottom:none}
+.info-table td:first-child{color:var(--muted2);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;width:100px;white-space:nowrap;background:var(--bg4)}
+
+/* ── Recommendation box ── */
+.rec-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;border-left:3px solid var(--green);padding:.875rem 1rem;margin-top:.75rem}
+.rec-title{font-size:.72rem;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.rec-steps{display:flex;flex-direction:column;gap:5px}
+.rec-step{display:flex;gap:8px;align-items:flex-start;font-size:.82rem;color:var(--muted);line-height:1.5}
+.rec-num{background:var(--green);color:var(--bg);width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;margin-top:2px}
+
+/* ── AI box ── */
+.ai-box{background:#0a1525;border:1px solid #1d3a5a;border-radius:8px;padding:.875rem 1rem;margin-top:.75rem;display:none}
+.ai-box-title{font-size:.72rem;color:var(--blue);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.4px}
+.ai-step{display:flex;gap:8px;align-items:flex-start;font-size:.82rem;color:var(--muted);line-height:1.5;margin-bottom:4px}
+.ai-num{background:var(--blue);color:var(--bg);width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;margin-top:2px}
+.ai-risk{font-size:.82rem;color:var(--muted);line-height:1.6;margin-bottom:8px}
+.ai-meta{font-size:.72rem;color:var(--muted2);margin-top:8px;padding-top:6px;border-top:1px solid var(--border2);display:flex;gap:12px}
+
+/* ── Summary ── */
+.ai-summary-card{background:linear-gradient(135deg,#0a1525,#0d1117);border:1px solid #1d3a5a;border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;display:none}
+
+/* ── Loading ── */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;align-items:center;justify-content:center;flex-direction:column;gap:1rem;backdrop-filter:blur(6px)}
+.spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Stats ── */
+.stat-mini{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:.875rem;text-align:center}
+.stat-mini-num{font-size:1.6rem;font-weight:700;font-family:var(--mono);line-height:1}
+.stat-mini-label{font-size:.72rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
+
+/* ── Payload badge ── */
+.payload-badge{font-family:var(--mono);font-size:.75rem;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;padding:4px 8px;color:var(--purple);word-break:break-all;display:inline-block;margin-top:4px;max-width:100%}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Page header -->
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div class="d-flex align-items-center gap-3">
+    <a href="/scan/{{ scan.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h1><i class="bi bi-file-earmark-bar-graph" style="color:var(--red)"></i>Security Report</h1>
+      <p class="mono" style="color:var(--muted2);font-size:.75rem">{{ scan.target[:80] }}{% if scan.target|length>80 %}…{% endif %}</p>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadAI()">
+      <i class="bi bi-robot me-1"></i>AI Analysis
+    </button>
+    <a href="/download-report/{{ scan.id }}" class="btn btn-danger btn-sm px-3">
+      <i class="bi bi-download me-1"></i>Download PDF
+    </a>
+  </div>
+</div>
+
+<!-- Cover -->
+<div class="report-cover">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+    <div>
+      <div style="font-size:.68rem;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Target</div>
+      <div class="mono" style="font-size:.9rem;color:var(--blue);margin-bottom:.5rem;max-width:500px;word-break:break-all">{{ scan.target }}</div>
+      <div style="font-size:.75rem;color:var(--muted2);display:flex;gap:1rem;flex-wrap:wrap">
+        <span><i class="bi bi-hash me-1"></i>Scan {{ scan.id }}</span>
+        <span><i class="bi bi-calendar me-1"></i>{{ scan.created_at }}</span>
+        <span class="sev sev-low"><i class="bi bi-check-circle me-1"></i>{{ scan.status|title }}</span>
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      {% for sev, color, bg, bc in [
+        ('Critical','#ff4444','#3a0a0a','rgba(255,68,68,.3)'),
+        ('High','#f0883e','#3a1a0a','rgba(240,136,62,.3)'),
+        ('Medium','#e3b341','#2a2000','rgba(227,179,65,.3)'),
+        ('Low','#3fb950','#0a2a10','rgba(63,185,80,.3)')
+      ] %}
+      <div class="sev-box" style="background:{{ bg }};border-color:{{ bc }}">
+        <div style="font-size:1.8rem;font-weight:700;color:{{ color }};font-family:var(--mono);line-height:1">
+          {{ vulns|selectattr('severity','equalto',sev)|list|length }}
+        </div>
+        <div style="font-size:.65rem;color:{{ color }};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">{{ sev }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+  {% for label, val, color in [('Pages Crawled',total_urls,'--blue'),('Forms Found',total_forms,'--yellow'),('Param URLs',total_params,'--purple'),('Total Vulns',vulns|length,'--red')] %}
+  <div class="col-6 col-md-3">
+    <div class="stat-mini">
+      <div class="stat-mini-num" style="color:var({{ color }})">{{ val }}</div>
+      <div class="stat-mini-label">{{ label }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- AI Summary -->
+<div class="ai-summary-card" id="ai-summary-card">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <div style="width:36px;height:36px;background:#0d1a2a;border:1px solid #1d3a5a;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="bi bi-robot" style="color:var(--blue)"></i>
+    </div>
+    <div>
+      <div style="font-size:.85rem;font-weight:600">AI Executive Summary</div>
+      <div style="font-size:.72rem;color:var(--muted2)">Generated by Gemini</div>
+    </div>
+  </div>
+  <div id="ai-summary-text" style="font-size:.85rem;color:var(--muted);line-height:1.7;white-space:pre-wrap"></div>
+</div>
+
+<!-- Findings -->
+<div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted2);font-weight:600;margin-bottom:.75rem">
+  <i class="bi bi-bug me-1"></i>Findings ({{ vulns|length }})
+</div>
+
+{% if vulns %}
+  {% for v in vulns %}
+  {% set sev_color = {'Critical':'var(--red)','High':'var(--orange)','Medium':'var(--yellow)','Low':'var(--green)'}.get(v.severity,'var(--muted)') %}
+  {% set sev_bg    = {'Critical':'#3a0a0a','High':'#3a1a0a','Medium':'#2a2000','Low':'#0a2a10'}.get(v.severity,'var(--bg3)') %}
+
+  <div class="vuln-card" id="vc-{{ v.id }}" style="border-left:3px solid {{ sev_color }}">
+    <!-- Header -->
+    <div class="vuln-card-header" style="background:{{ sev_bg }}33">
+      <div style="width:9px;height:9px;border-radius:50%;background:{{ sev_color }};flex-shrink:0"></div>
+      <span style="font-weight:600;font-size:.88rem;flex:1">{{ v.vuln_type }}</span>
+      {% if v.severity=='Critical' %}<span class="sev sev-critical">Critical</span>
+      {% elif v.severity=='High' %}<span class="sev sev-high">High</span>
+      {% elif v.severity=='Medium' %}<span class="sev sev-medium">Medium</span>
+      {% else %}<span class="sev sev-low">Low</span>{% endif %}
+      <span style="font-size:.72rem;color:var(--muted2);font-family:var(--mono)">#{{ loop.index }}</span>
+    </div>
+
+    <!-- Body -->
+    <div class="vuln-card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <!-- Info table -->
+          <table class="info-table">
+            <tr>
+              <td>URL</td>
+              <td><span class="mono" style="color:var(--blue);font-size:.78rem;word-break:break-all">{{ v.url }}</span></td>
+            </tr>
+            <tr>
+              <td>Parameter</td>
+              <td><code style="color:var(--orange);font-size:.82rem">{{ v.parameter }}</code></td>
+            </tr>
+            {% if v.payload and v.payload != 'N/A' %}
+            <tr>
+              <td>Payload</td>
+              <td><span class="payload-badge">{{ v.payload[:80] }}{% if v.payload|length > 80 %}…{% endif %}</span></td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td>Description</td>
+              <td style="color:var(--muted);line-height:1.5">{{ v.description }}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="col-md-6">
+          <!-- Recommendation box — split by numbered points -->
+          <div class="rec-box">
+            <div class="rec-title">
+              <i class="bi bi-shield-check"></i>How to Fix
+            </div>
+            <div class="rec-steps">
+              {% set rec = v.recommendation %}
+              {% set steps = rec | regex_split('\\d+\\.\\s+') %}
+              {% if steps | length > 1 %}
+                {% for step in steps %}
+                  {% if step.strip() %}
+                  <div class="rec-step">
+                    <div class="rec-num">{{ loop.index }}</div>
+                    <span>{{ step.strip().rstrip('.').strip() }}</span>
+                  </div>
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <div class="rec-step">
+                  <div class="rec-num">1</div>
+                  <span>{{ rec }}</span>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- AI Analysis slot -->
+          <div class="ai-box" id="ai-box-{{ v.id }}">
+            <div class="ai-box-title"><i class="bi bi-robot"></i>AI Analysis</div>
+            <div id="ai-risk-{{ v.id }}" class="ai-risk"></div>
+            <div id="ai-steps-{{ v.id }}" class="rec-steps"></div>
+            <div id="ai-meta-{{ v.id }}" class="ai-meta"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <i class="bi bi-shield-check" style="color:var(--green)"></i>
+    <h6>No vulnerabilities found</h6>
+  </div>
+{% endif %}
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div style="color:var(--muted);font-size:.85rem">Analyzing all vulnerabilities with Gemini AI…</div>
+  <div id="loadingProgress" style="color:var(--muted2);font-size:.78rem">Please wait…</div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadAI(){
+  const overlay = document.getElementById('loadingOverlay');
+  const progress = document.getElementById('loadingProgress');
+  overlay.style.display = 'flex';
+  progress.textContent = 'Sending ' + {{ vulns|length }} + ' vulnerabilities to Gemini…';
+
+  fetch('/api/ai-analyze/{{ scan.id }}')
+    .then(r => r.json())
+    .then(data => {
+      overlay.style.display = 'none';
+
+      // Show summary
+      if(data.summary){
+        document.getElementById('ai-summary-text').textContent = data.summary;
+        document.getElementById('ai-summary-card').style.display = 'block';
+      }
+
+      // Show per-vuln analysis
+      (data.analyses || []).forEach(item => {
+        const box   = document.getElementById('ai-box-' + item.id);
+        const risk  = document.getElementById('ai-risk-' + item.id);
+        const steps = document.getElementById('ai-steps-' + item.id);
+        const meta  = document.getElementById('ai-meta-' + item.id);
+        if(!box || !item.analysis) return;
+
+        const a = item.analysis;
+
+        // Risk explanation
+        if(a.risk_explanation){
+          risk.textContent = a.risk_explanation;
+        }
+
+        // Fix steps — numbered with circles
+        if(a.fix_steps && a.fix_steps.length){
+          steps.innerHTML = '';
+          a.fix_steps.forEach((step, i) => {
+            const div = document.createElement('div');
+            div.className = 'ai-step';
+            div.innerHTML = `<div class="ai-num">${i+1}</div><span>${step}</span>`;
+            steps.appendChild(div);
+          });
+        }
+
+        // Meta info
+        if(a.cwe || a.cvss_estimate){
+          let metaHtml = '';
+          if(a.cwe)           metaHtml += `<span><i class="bi bi-tag me-1"></i>${a.cwe}</span>`;
+          if(a.cvss_estimate) metaHtml += `<span><i class="bi bi-speedometer2 me-1"></i>CVSS ${a.cvss_estimate}</span>`;
+          if(a.attack_scenario) metaHtml += `<span style="color:var(--orange)"><i class="bi bi-exclamation-circle me-1"></i>${a.attack_scenario}</span>`;
+          meta.innerHTML = metaHtml;
+        }
+
+        box.style.display = 'block';
+      });
+    })
+    .catch(err => {
+      overlay.style.display = 'none';
+      alert('AI analysis failed. Check GEMINI_API_KEY.\n' + err);
+    });
+}
+</script>
+{% endblock %}
